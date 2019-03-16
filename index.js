@@ -38,7 +38,8 @@ const update = () => {
     })
   } catch (err) {
     logger.error('Exec error: ', err)
-    bot.sendMessage(LOG_CHAT_ID, 'Something went wrong...').finally()
+    bot.sendMessage(LOG_CHAT_ID, 'Something went wrong...')
+      .catch(err => logger.error('Sending in pm failed ', err))
   }
 }
 
@@ -48,13 +49,15 @@ setInterval(update, 10 * 60 * 1000)
 bot.onText(/\/balance.*/, msg => {
   if (fs.existsSync('./balances.json')) {
     const result = JSON.parse(fs.readFileSync('balances.json', 'utf-8'))
-    bot.sendMessage(msg.chat.id, result['•••• 0279']).finally()
+    bot.sendMessage(msg.chat.id, result['•••• 0279'])
+      .catch(err => logger.error('Sending balance failed ', err))
   }
 })
 
 bot.onText(/\/tx.*/, msg => {
   if (fs.existsSync('./tx.png'))
-    bot.sendPhoto(msg.chat.id, fs.readFileSync('./tx.png')).finally()
+    bot.sendPhoto(msg.chat.id, fs.readFileSync('./tx.png'))
+      .catch(err => logger.error('Sending tx list failed ', err))
 })
 
 bot.on('message', msg => {
