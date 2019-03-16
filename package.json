@@ -1,0 +1,11 @@
+{
+  "name": "SberbankAPI",
+  "version": "1.0.0",
+  "dependencies": {
+    "node-telegram-bot-api": "^0.30.0",
+    "winston": "^3.2.1"
+  },
+  "devDependencies": {
+    "slimerjs": "^1.0.0"
+  }
+}
