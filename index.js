@@ -26,6 +26,26 @@ const logger = createLogger({
 
 const bot = new TelegramBot(token, {polling: true})
 
+const people = [
+  {name: 'Artem', selected: false},
+  {name: 'Lenya', selected: false},
+  {name: 'Kirill', selected: false},
+  {name: 'Serega', selected: false},
+  {name: 'Nikita', selected: false}
+]
+
+const generateMarkup = people => ({
+  reply_markup: {
+    inline_keyboard: [
+      people.map(({name, selected}, index) => ({
+        text: name + (selected ? ' ✅' : ' ❌'),
+        callback_data: selected ? `-${index}` : `+${index}`
+      })),
+      [{text: 'Submit', callback_data: 'submit'}]
+    ]
+  }
+})
+
 const update = () => {
   try {
     const startTime = new Date()
@@ -60,6 +80,37 @@ bot.onText(/\/tx.*/, msg => {
       .catch(err => logger.error('Sending tx list failed ', err))
 })
 
+bot.onText(/\/rnd.*/, msg => {
+  for (let person of people)
+    person.selected = false
+
+  bot.sendMessage(msg.chat.id, 'Select parashnikov:', generateMarkup(people))
+    .catch(err => logger.error('Rnd failed ', err))
+})
+
 bot.on('message', msg => {
   logger.info(JSON.stringify(msg))
+})
+
+bot.on('callback_query', event => {
+  logger.info(JSON.stringify(event))
+
+  if (event.data[0] === '+' || event.data[0] === '-') {
+    const person = people[event.data[1] - '0']
+    person.selected = !person.selected
+
+    bot.editMessageReplyMarkup(generateMarkup(people).reply_markup, {
+      chat_id: event.message.chat.id,
+      message_id: event.message.message_id
+    }).catch(err => logger.error('Answer callback query failed ', err))
+  } else {
+    const names = people.filter(x => x.selected).map(x => x.name)
+    const text = names.length === 0 ? 'Nihuya ne vibral, eblan tupoi' : `${names[Math.floor(Math.random() * names.length)]} moet huetu (${names.join(', ')})`
+
+    bot.editMessageText(text, {
+      reply_markup: {},
+      chat_id: event.message.chat.id,
+      message_id: event.message.message_id
+    }).catch(err => logger.error('Submit failed ', err))
+  }
 })
