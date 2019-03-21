@@ -5,8 +5,10 @@ const fs = require('fs')
 const {createLogger, format, transports} = require('winston')
 const {combine, timestamp, printf} = format
 
-const token = process.env.TOKEN
-const LOG_CHAT_ID = process.env.LOG_CHAT_ID
+const TOKEN = process.env.TOKEN
+const LOG_CHAT_ID = parseInt(process.env.LOG_CHAT_ID)
+const UPDATE_INTERVAL = 600000
+const RESPONSE_TIMEOUT = 15000
 
 const myFormat = printf(({level, message, label, timestamp}) => {
   return `${timestamp}: ${message}`
@@ -24,7 +26,7 @@ const logger = createLogger({
   ]
 })
 
-const bot = new TelegramBot(token, {polling: true})
+const bot = new TelegramBot(TOKEN, {polling: true})
 
 const people = [
   {name: 'Artem', selected: false},
@@ -58,16 +60,25 @@ const update = () => {
     })
   } catch (err) {
     logger.error('Exec error: ', err)
-    bot.sendMessage(LOG_CHAT_ID, 'Something went wrong...')
-      .catch(err => logger.error('Sending in pm failed ', err))
   }
 }
 
+const checkResponseTimeout = ({date}) => {
+  date *= 1000
+
+  if (date - lastResponse > RESPONSE_TIMEOUT) {
+    lastResponse = date
+    return true
+  }
+}
+
+let lastResponse = new Date()
+
 setImmediate(update)
-setInterval(update, 10 * 60 * 1000)
+setInterval(update, UPDATE_INTERVAL)
 
 bot.onText(/\/balance.*/, msg => {
-  if (fs.existsSync('./balances.json')) {
+  if (checkResponseTimeout(msg) && fs.existsSync('./balances.json')) {
     const result = JSON.parse(fs.readFileSync('balances.json', 'utf-8'))
     bot.sendMessage(msg.chat.id, result['•••• 0279'])
       .catch(err => logger.error('Sending balance failed ', err))
@@ -75,21 +86,19 @@ bot.onText(/\/balance.*/, msg => {
 })
 
 bot.onText(/\/tx.*/, msg => {
-  if (fs.existsSync('./tx.png'))
+  if (checkResponseTimeout(msg) && fs.existsSync('./tx.png'))
     bot.sendPhoto(msg.chat.id, fs.readFileSync('./tx.png'))
       .catch(err => logger.error('Sending tx list failed ', err))
 })
 
 bot.onText(/\/rnd.*/, msg => {
-  for (let person of people)
-    person.selected = false
+  if (checkResponseTimeout(msg)) {
+    for (let person of people)
+      person.selected = false
 
-  bot.sendMessage(msg.chat.id, 'Select parashnikov:', generateMarkup(people))
-    .catch(err => logger.error('Rnd failed ', err))
-})
-
-bot.on('message', msg => {
-  logger.info(JSON.stringify(msg))
+    bot.sendMessage(msg.chat.id, 'Select:', generateMarkup(people))
+      .catch(err => logger.error('Rnd failed ', err))
+  }
 })
 
 bot.on('callback_query', event => {
@@ -105,7 +114,7 @@ bot.on('callback_query', event => {
     }).catch(err => logger.error('Answer callback query failed ', err))
   } else {
     const names = people.filter(x => x.selected).map(x => x.name)
-    const text = names.length === 0 ? 'Nihuya ne vibral, eblan tupoi' : `${names[Math.floor(Math.random() * names.length)]} moet huetu (${names.join(', ')})`
+    const text = names.length === 0 ? 'No one is selected' : `Chose ${names[Math.floor(Math.random() * names.length)]} out of [${names.join(', ')}]`
 
     bot.editMessageText(text, {
       reply_markup: {},
@@ -113,4 +122,22 @@ bot.on('callback_query', event => {
       message_id: event.message.message_id
     }).catch(err => logger.error('Submit failed ', err))
   }
+})
+
+bot.onText(/\/logs.*/, msg => {
+  if (msg.chat.id === LOG_CHAT_ID) {
+    const full = fs.readFileSync('full.log')
+    if (full.length > 0)
+      bot.sendDocument(LOG_CHAT_ID, 'full.log')
+        .catch(err => logger.error('Sending logs failed ', err))
+
+    const error = fs.readFileSync('error.log')
+    if (error.length > 0)
+      bot.sendDocument(LOG_CHAT_ID, 'error.log')
+        .catch(err => logger.error('Sending logs failed ', err))
+  }
+})
+
+bot.on('message', msg => {
+  logger.info(JSON.stringify(msg))
 })
